@@ -1,0 +1,102 @@
+---
+output: github_document
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  warning = FALSE,
+  error = FALSE,
+  message = FALSE,
+  comment = "#>"
+)
+```
+
+# Análise - Doutorado - Edvaldo Aldo Litos Paulo Nhanombe
+
+
+## Pré-tratamento dos dados
+```{r}
+dados <- readxl::read_xlsx("data-raw/Exp. Verão-2024_25.xlsx") |> 
+  janitor::clean_names()
+readr::write_rds(dados,"data/batata-doce-ednaldo.rds")
+```
+
+## Análise exploratória
+
+### Carregando pacotes e banco de dados
+
+```{r}
+library(tidyverse)
+data_set <- read_rds("data/batata-doce-ednaldo.rds")
+glimpse(data_set)
+```
+
+```{r}
+lista_variaveis <- data_set |> select(pt:tmspa_percent) |> names()
+# map(lista_variaveis, ~{
+#   data_set |> 
+#     ggplot(aes(x=!!sym(.x), y = ..density..)) +
+#     geom_histogram(color="black",fill="gray", bins = 15) +
+#     labs(title = .x) +
+#     theme_bw()
+# })
+```
+### Análise de resíduos - Pré-supostos da ANOVA
+
+```{r}
+map(lista_variaveis, ~{
+  print("========================")
+  print(.x)
+  print("========================")
+  y <- data_set |> pull(!!sym(.x))
+  trat <- data_set |> pull(designacao) |> as_factor()
+  bloco <- data_set |> pull(bloco) |> as_factor()
+  mod <- aov(y ~ trat + bloco)
+  print(anova(mod))
+  rs <- rstudent(mod)
+  yp <- predict(mod)
+  sw_test <- shapiro.test(rs)
+  sw_test <- round(sw_test$p.value,5)
+  print(
+    as_tibble(rs) |> 
+      ggplot(aes(rs)) +
+      geom_histogram(bins=14,color="black",fill="aquamarine4") +
+      labs(title = .x,
+           subtitle = paste("Shapiro-Wilk - p-valor: ",sw_test)) +
+      theme_bw()
+  )
+  df_aux <- data_set |> 
+    select(designacao, bloco,!!sym(.x)) |> 
+    add_column(rs,yp)  |> 
+    filter(rs > 3 | rs < -3)
+    # arrange(rs)
+  if(nrow(df_aux) != 0) print(df_aux)
+  levene_teste <- lawstat::levene.test(y,trat)
+  levene_teste <- round(levene_teste$p.value,5)
+  box_plot <- data_set |> 
+      group_by(designacao) |> 
+      mutate(
+        y_mean = median(!!sym(.x),na.rm=TRUE),
+        designacao = as_factor(designacao))  |>
+      ungroup() |> 
+      mutate(designacao = designacao |>  fct_reorder(y_mean)) |> 
+      ggplot(aes(x=as_factor(designacao),y=!!sym(.x),
+             fill=as_factor(designacao))) +
+      geom_boxplot() +
+      scale_fill_viridis_d(option = "magma") +
+      theme_bw()+
+      labs(x="Designacao",
+           title =  paste("Levene test - p-valor: ",levene_teste))
+  
+  print(
+    box_plot
+  )
+  print(cat("\n"))
+})
+```
+
+
+
