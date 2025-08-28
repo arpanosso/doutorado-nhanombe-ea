@@ -50,6 +50,8 @@ lista_variaveis <- data_set |> select(pt:tmspa_percent) |> names()
 #     theme_bw()
 # })
 ```
+
+<!--
 ### Análise de resíduos - Pré-supostos da ANOVA
 
 ```{r,eval=FALSE}
@@ -104,7 +106,7 @@ map(lista_variaveis, ~{
 })
 ```
 
-
+-->
 
 ## Análise exploratória - Multiespectral
 
@@ -127,6 +129,9 @@ epocas <- data_set |> pull(epoca) |> unique()
 #     theme_bw()
 # })
 ```
+
+<!--
+
 ### Análise de resíduos - Pré-supostos da ANOVA
 
 ```{r}
@@ -184,4 +189,4 @@ for(i in seq_along(lista_variaveis)){
   }
 }
 ```
-
+-->
