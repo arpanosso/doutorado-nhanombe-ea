@@ -3,93 +3,55 @@
 
 # Análise - Doutorado - Edvaldo Aldo Litos Paulo Nhanombe
 
-## Pré-tratamento dos dados
-
-``` r
-dados_batata <- readxl::read_xlsx("data-raw/Exp. Verão-2024_25.xlsx") |> 
-  janitor::clean_names()
-readr::write_rds(dados_batata,"data/batata-doce-ednaldo.rds")
-
-dados_multi <- readxl::read_xlsx("data-raw/HTP_Verão.xlsx") |> 
-  janitor::clean_names()
-readr::write_rds(dados_multi,"data/batata-doce-multiespectral.rds")
-```
-
-## Análise exploratória - Batata Doce
+## Análise de variância - Batata Doce
 
 ### Carregando pacotes e banco de dados
 
 ``` r
 library(tidyverse)
-data_set <- read_rds("data/batata-doce-ednaldo.rds")
-glimpse(data_set)
+library(vegan)
+library(ExpDes.pt)
+data_set_bt <- read_rds("data/batata-doce-ednaldo.rds")
+glimpse(data_set_bt)
+#> Rows: 54
+#> Columns: 17
+#> $ designacao    <dbl> 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7,…
+#> $ bloco         <dbl> 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1,…
+#> $ pt            <dbl> 4.4450, 1.8800, 1.2250, 4.5500, 1.3550, 3.2200, 3.6600, …
+#> $ pc            <dbl> 4.305, 1.880, 1.160, 4.435, 1.315, 3.085, 3.615, 1.760, …
+#> $ pnc           <dbl> 0.1400, 0.0000, 0.0650, 0.1150, 0.0400, 0.1350, 0.0450, …
+#> $ nrt           <dbl> 16, 6, 13, 16, 8, 13, 13, 16, 12, 25, 10, 22, 8, 4, 10, …
+#> $ nrc           <dbl> 13, 6, 11, 13, 7, 10, 12, 12, 11, 21, 9, 16, 7, 4, 5, 12…
+#> $ nrnc          <dbl> 3, 0, 2, 3, 1, 3, 1, 4, 1, 4, 1, 6, 1, 0, 5, 0, 3, 3, 8,…
+#> $ msr_100_g     <dbl> 0.030, 0.025, 0.035, 0.030, 0.025, 0.025, 0.030, 0.030, …
+#> $ mr            <dbl> 0.27781250, 0.31333333, 0.09423077, 0.28437500, 0.169375…
+#> $ mrc           <dbl> 0.3311538, 0.3133333, 0.1054545, 0.3411538, 0.1878571, 0…
+#> $ tms_percent   <dbl> 30, 25, 35, 30, 25, 25, 30, 30, 30, 25, 25, 25, 30, 30, …
+#> $ ptms          <dbl> 1.333500, 0.470000, 0.428750, 1.365000, 0.338750, 0.8050…
+#> $ ptms_kg_ha    <dbl> 8418.386, 2967.110, 2706.699, 8617.245, 2138.529, 5081.9…
+#> $ mfpa_kg       <dbl> 8.670, 8.420, 12.745, 4.365, 2.975, 5.655, 4.395, 4.950,…
+#> $ mspa_1000_g   <dbl> 0.125, 0.100, 0.165, 0.115, 0.140, 0.150, 0.130, 0.150, …
+#> $ tmspa_percent <dbl> 12.5, 10.0, 16.5, 11.5, 14.0, 15.0, 13.0, 15.0, 14.5, 12…
 ```
 
 ``` r
-lista_variaveis <- data_set |> select(pt:tmspa_percent) |> names()
-# map(lista_variaveis, ~{
-#   data_set |> 
-#     ggplot(aes(x=!!sym(.x), y = ..density..)) +
-#     geom_histogram(color="black",fill="gray", bins = 15) +
-#     labs(title = .x) +
-#     theme_bw()
-# })
+lista_variaveis <- data_set_bt |> select(pt:tmspa_percent) |> names()
 ```
 
-<!--
 ### Análise de resíduos - Pré-supostos da ANOVA
-&#10;
+
 ``` r
 map(lista_variaveis, ~{
   print("========================")
   print(.x)
   print("========================")
-  y <- data_set |> pull(!!sym(.x))
-  trat <- data_set |> pull(designacao) |> as_factor()
-  bloco <- data_set |> pull(bloco) |> as_factor()
-  mod <- aov(y ~ trat + bloco)
-  print(anova(mod))
-  rs <- rstudent(mod)
-  yp <- predict(mod)
-  sw_test <- shapiro.test(rs)
-  sw_test <- round(sw_test$p.value,5)
-  print(
-    as_tibble(rs) |> 
-      ggplot(aes(rs)) +
-      geom_histogram(bins=14,color="black",fill="aquamarine4") +
-      labs(title = .x,
-           subtitle = paste("Shapiro-Wilk - p-valor: ",sw_test)) +
-      theme_bw()
-  )
-  df_aux <- data_set |> 
-    select(designacao, bloco,!!sym(.x)) |> 
-    add_column(rs,yp)  |> 
-    filter(rs > 3 | rs < -3)
-    # arrange(rs)
-  if(nrow(df_aux) != 0) print(df_aux)
-  levene_teste <- lawstat::levene.test(y,trat)
-  levene_teste <- round(levene_teste$p.value,5)
-  box_plot <- data_set |> 
-      group_by(designacao) |> 
-      mutate(
-        y_mean = median(!!sym(.x),na.rm=TRUE),
-        designacao = as_factor(designacao))  |>
-      ungroup() |> 
-      mutate(designacao = designacao |>  fct_reorder(y_mean)) |> 
-      ggplot(aes(x=as_factor(designacao),y=!!sym(.x),
-             fill=as_factor(designacao))) +
-      geom_boxplot() +
-      scale_fill_viridis_d(option = "magma") +
-      theme_bw()+
-      labs(x="Designacao",
-           title =  paste("Levene test - p-valor: ",levene_teste))
-  &#10;  print(
-    box_plot
-  )
-  print(cat("\n"))
+  y <- data_set_bt |> pull(!!sym(.x))
+  trat <- data_set_bt |> pull(designacao) |> as_factor()
+  bloco <- data_set_bt |> pull(bloco) |> as_factor()
+  dbc(trat,bloco,y,mcomp = "sk")
+    print(cat("\n"))
 })
 ```
-&#10;-->
 
 ## Análise exploratória - Multiespectral
 
@@ -97,8 +59,8 @@ map(lista_variaveis, ~{
 
 ``` r
 library(tidyverse)
-data_set <- read_rds("data/batata-doce-multiespectral.rds")
-glimpse(data_set)
+data_set_mult <- read_rds("data/batata-doce-multiespectral.rds")
+glimpse(data_set_mult)
 #> Rows: 216
 #> Columns: 12
 #> $ epoca      <dbl> 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,…
@@ -116,778 +78,865 @@ glimpse(data_set)
 ```
 
 ``` r
-lista_variaveis <- data_set |> select(r:vari) |> names()
-epocas <- data_set |> pull(epoca) |> unique()
-# map(lista_variaveis, ~{
-#   data_set |> 
-#     ggplot(aes(x=!!sym(.x), y = ..density..)) +
-#     geom_histogram(color="black",fill="gray", bins = 15) +
-#     labs(title = .x) +
-#     theme_bw()
-# })
+lista_variaveis <- data_set_mult |> select(r:vari) |> names()
 ```
 
-<!--
-&#10;### Análise de resíduos - Pré-supostos da ANOVA
-&#10;
+### Análise considerando parcelas subdivididas
+
 ``` r
 for(i in seq_along(lista_variaveis)){
-  for(j in seq_along(epocas)){
-    print("========================")
-    print(paste(lista_variaveis[i]," Época: ",epocas[j]))
-    print("========================")
-    y <- data_set |> filter(epoca == epocas[j]) |> pull(lista_variaveis[i])
-    trat <- data_set |> filter(epoca ==epocas[j])|> pull(designacao) |> as_factor()
-    bloco <- data_set |> filter(epoca == epocas[j]) |> pull(rep) |> as_factor()
-    mod <- aov(y ~ trat + bloco)
-    print(anova(mod))
-    rs <- rstudent(mod)
-    yp <- predict(mod)
-    sw_test <- shapiro.test(rs)
-    sw_test <- round(sw_test$p.value,5)
-    print(
-      as_tibble(rs) |> 
-        ggplot(aes(rs)) +
-        geom_histogram(bins=14,color="black",fill="aquamarine4") +
-        labs(title = paste(lista_variaveis[i]," Época: ",epocas[j]),
-             subtitle = paste("Shapiro-Wilk - p-valor: ",sw_test)) +
-        theme_bw()
-    )
-    df_aux <- data_set |> 
-      filter(epoca == epocas[j]) |> 
-      select(designacao, rep,lista_variaveis[i]) |> 
-      add_column(rs,yp)  |> 
-      filter(rs > 3 | rs < -3)
-    # arrange(rs)
-    if(nrow(df_aux) != 0) print(df_aux)
-    levene_teste <- lawstat::levene.test(y,trat)
-    levene_teste <- round(levene_teste$p.value,5)
-    box_plot <- data_set |> 
-      filter(epoca == epocas[j]) |> 
-      group_by(designacao) |> 
-      mutate(
-        y_mean = median(!!sym(lista_variaveis[i]),na.rm=TRUE),
-        designacao = as_factor(designacao))  |>
-      ungroup() |> 
-      mutate(designacao = designacao |>  fct_reorder(y_mean)) |> 
-      ggplot(aes(x=as_factor(designacao),y=!!sym(lista_variaveis[i]),
-                 fill=as_factor(designacao))) +
-      geom_boxplot() +
-      scale_fill_viridis_d(option = "magma") +
-      theme_bw()+
-      labs(x="Designacao",
-           title =  paste("Levene test - p-valor: ",levene_teste))
-    &#10;    print(
-      box_plot
-    )
-    print(cat("\n"))
-  }
+  print("========================")
+  print(lista_variaveis[i])
+  print("========================")
+  y <- data_set_mult |> pull(lista_variaveis[i])
+  trat <- data_set_mult |> pull(designacao) |> as_factor()
+  epoca <- data_set_mult |> pull(epoca) |> as_factor()
+  bloco <- data_set_mult |> pull(rep) |> as_factor()
+  psub2.dbc(trat,epoca,bloco,y,mcomp = "sk",
+            fac.names=c("trat","epoca"),sigT = 0.2)
+  print(cat("\n"))
 }
 #> [1] "========================"
-#> [1] "r  Época:  1"
+#> [1] "r"
 #> [1] "========================"
-#> Analysis of Variance Table
+#> ------------------------------------------------------------------------
+#> Legenda:
+#> FATOR 1 (parcela):  trat 
+#> FATOR 2 (subparcela):  epoca 
+#> ------------------------------------------------------------------------
 #> 
-#> Response: y
-#>           Df  Sum Sq Mean Sq F value  Pr(>F)   
-#> trat      17 2057358  121021  0.9087 0.57039   
-#> bloco      2 1509206  754603  5.6660 0.00752 **
-#> Residuals 34 4528110  133180                   
+#> ------------------------------------------------------------------------
+#> Quadro da analise de variancia
+#> ------------------------------------------------------------------------
+#>             GL        SQ      QM     Fc  Pr(>Fc)    
+#> trat        17  21035789 1237399 1.3321 0.231995    
+#> Bloco        2   3613178 1806589 1.9448 0.158601    
+#> Erro a      34  31583892  928938                    
+#> epoca        3  18635294 6211765 6.7244 0.000334 ***
+#> trat*epoca  51  32533763  637917 0.6906 0.929260    
+#> Erro b     108  99766218  923761                    
+#> Total      215 207168134                            
 #> ---
 #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#> ------------------------------------------------------------------------
+#> CV 1 = 4.690116 %
+#> CV 2 = 4.67703 %
+#> 
+#> Interacao nao significativa: analisando os efeitos simples
+#> ------------------------------------------------------------------------
+#> trat
+#> De acordo com o teste F, as medias desse fator sao estatisticamente iguais.
+#> ------------------------------------------------------------------------
+#>    Niveis   Medias
+#> 1       1 20805.25
+#> 2      10 20606.96
+#> 3      11 20680.45
+#> 4      12 20396.56
+#> 5      13 20567.10
+#> 6      14 20518.17
+#> 7      15 20531.12
+#> 8      16 21085.86
+#> 9      17 19660.71
+#> 10     18 20562.39
+#> 11      2 21064.52
+#> 12      3 20355.16
+#> 13      4 20361.70
+#> 14      5 20176.99
+#> 15      6 20661.00
+#> 16      7 20818.81
+#> 17      8 20501.75
+#> 18      9 20543.73
+#> ------------------------------------------------------------------------
+#> epoca
+#> Teste de Scott-Knott
+#> ------------------------------------------------------------------------
+#>   Grupos Tratamentos   Medias
+#> 1      a           1 20984.55
+#> 2      b           5 20565.87
+#> 3      b           4 20489.50
+#> 4      c           3 20159.68
+#> ------------------------------------------------------------------------
+#> 
+#> 
+#> NULL
+#> [1] "========================"
+#> [1] "g"
+#> [1] "========================"
+#> ------------------------------------------------------------------------
+#> Legenda:
+#> FATOR 1 (parcela):  trat 
+#> FATOR 2 (subparcela):  epoca 
+#> ------------------------------------------------------------------------
+#> 
+#> ------------------------------------------------------------------------
+#> Quadro da analise de variancia
+#> ------------------------------------------------------------------------
+#>             GL         SQ        QM     Fc   Pr(>Fc)    
+#> trat        17  515379053  30316415  3.494  0.000929 ***
+#> Bloco        2  204175172 102087586 11.766  0.000131 ***
+#> Erro a      34  295009864   8676761                     
+#> epoca        3 1362190809 454063603 37.483 < 2.2e-16 ***
+#> trat*epoca  51  470189755   9219407  0.761  0.860851    
+#> Erro b     108 1308285733  12113757                     
+#> Total      215 4155230386                               
+#> ---
+#> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#> ------------------------------------------------------------------------
+#> CV 1 = 11.3978 %
+#> CV 2 = 13.46734 %
+#> 
+#> Interacao nao significativa: analisando os efeitos simples
+#> ------------------------------------------------------------------------
+#> trat
+#> Teste de Scott-Knott
+#> ------------------------------------------------------------------------
+#>    Grupos Tratamentos   Medias
+#> 1       a          12 30144.71
+#> 2       b          14 27555.53
+#> 3       b          16 27541.63
+#> 4       b          17 27267.54
+#> 5       b           6 27265.71
+#> 6       b           7 26754.83
+#> 7       c          15 25875.14
+#> 8       c          13 25565.37
+#> 9       c           9 25380.83
+#> 10      c           1 25195.12
+#> 11      c          11 24869.63
+#> 12      c           5 24793.43
+#> 13      c           4 24690.05
+#> 14      c          18 24584.68
+#> 15      c           3 24565.46
+#> 16      c           8 24431.27
+#> 17      c          10 24427.04
+#> 18      c           2 24281.78
+#> ------------------------------------------------------------------------
+#> 
+#> epoca
+#> Teste de Scott-Knott
+#> ------------------------------------------------------------------------
+#>   Grupos Tratamentos   Medias
+#> 1      a           1 29624.78
+#> 2      b           4 26603.53
+#> 3      c           3 23723.67
+#> 4      c           5 23423.51
+#> ------------------------------------------------------------------------
+#> 
+#> 
+#> NULL
+#> [1] "========================"
+#> [1] "b"
+#> [1] "========================"
+#> ------------------------------------------------------------------------
+#> Legenda:
+#> FATOR 1 (parcela):  trat 
+#> FATOR 2 (subparcela):  epoca 
+#> ------------------------------------------------------------------------
+#> 
+#> ------------------------------------------------------------------------
+#> Quadro da analise de variancia
+#> ------------------------------------------------------------------------
+#>             GL      SQ      QM     Fc Pr(>Fc)    
+#> trat        17  2151.5  126.56  2.497 0.01132 *  
+#> Bloco        2     2.6    1.32  0.026 0.97432    
+#> Erro a      34  1723.2   50.68                   
+#> epoca        3  5386.6 1795.54 43.649 < 2e-16 ***
+#> trat*epoca  51  2100.8   41.19  1.001 0.48627    
+#> Erro b     108  4442.7   41.14                   
+#> Total      215 15807.5                           
+#> ---
+#> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#> ------------------------------------------------------------------------
+#> CV 1 = 5.439989 %
+#> CV 2 = 4.901041 %
+#> 
+#> Interacao nao significativa: analisando os efeitos simples
+#> ------------------------------------------------------------------------
+#> trat
+#> Teste de Scott-Knott
+#> ------------------------------------------------------------------------
+#>    Grupos Tratamentos   Medias
+#> 1       a          13 137.1923
+#> 2       a           8 136.2021
+#> 3       a          15 133.5895
+#> 4       a           7 132.8511
+#> 5       a          16 132.2818
+#> 6       a          10 132.1871
+#> 7       a          14 132.0029
+#> 8       a           9 131.5938
+#> 9       a           2 131.2540
+#> 10      a           4 130.8053
+#> 11      a          18 130.4663
+#> 12      a           5 130.2510
+#> 13      a          11 129.9713
+#> 14      b           1 129.0203
+#> 15      b           3 128.4058
+#> 16      b           6 127.2194
+#> 17      b          12 126.5703
+#> 18      b          17 123.7129
+#> ------------------------------------------------------------------------
+#> 
+#> epoca
+#> Teste de Scott-Knott
+#> ------------------------------------------------------------------------
+#>   Grupos Tratamentos   Medias
+#> 1      a           1 137.5763
+#> 2      b           3 132.6886
+#> 3      c           4 129.3348
+#> 4      d           5 123.8619
+#> ------------------------------------------------------------------------
+#> 
+#> 
+#> NULL
+#> [1] "========================"
+#> [1] "nir"
+#> [1] "========================"
+#> ------------------------------------------------------------------------
+#> Legenda:
+#> FATOR 1 (parcela):  trat 
+#> FATOR 2 (subparcela):  epoca 
+#> ------------------------------------------------------------------------
+#> 
+#> ------------------------------------------------------------------------
+#> Quadro da analise de variancia
+#> ------------------------------------------------------------------------
+#>             GL         SQ         QM      Fc  Pr(>Fc)    
+#> trat        17 2.2675e+09  133382340  0.8611 0.618784    
+#> Bloco        2 1.7353e+09  867652607  5.6016 0.007893 ** 
+#> Erro a      34 5.2664e+09  154893961                     
+#> epoca        3 6.5356e+09 2178538595 12.0923    1e-06 ***
+#> trat*epoca  51 5.7802e+09  113337865  0.6291 0.966765    
+#> Erro b     108 1.9457e+10  180158451                     
+#> Total      215 4.1042e+10                                
+#> ---
+#> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#> ------------------------------------------------------------------------
+#> CV 1 = 26.2067 %
+#> CV 2 = 28.26327 %
+#> 
+#> Interacao nao significativa: analisando os efeitos simples
+#> ------------------------------------------------------------------------
+#> trat
+#> De acordo com o teste F, as medias desse fator sao estatisticamente iguais.
+#> ------------------------------------------------------------------------
+#>    Niveis   Medias
+#> 1       1 50385.55
+#> 2      10 39521.03
+#> 3      11 52418.79
+#> 4      12 48621.46
+#> 5      13 46181.37
+#> 6      14 46363.99
+#> 7      15 43539.86
+#> 8      16 50136.37
+#> 9      17 50806.35
+#> 10     18 49649.78
+#> 11      2 45928.81
+#> 12      3 44288.09
+#> 13      4 43559.83
+#> 14      5 50904.86
+#> 15      6 47008.19
+#> 16      7 50196.96
+#> 17      8 46466.71
+#> 18      9 48847.37
+#> ------------------------------------------------------------------------
+#> epoca
+#> Teste de Scott-Knott
+#> ------------------------------------------------------------------------
+#>   Grupos Tratamentos   Medias
+#> 1      a           1 51718.28
+#> 2      a           4 50641.12
+#> 3      a           5 49545.59
+#> 4      b           3 38056.20
+#> ------------------------------------------------------------------------
+#> 
+#> 
+#> NULL
+#> [1] "========================"
+#> [1] "red_edge"
+#> [1] "========================"
+#> ------------------------------------------------------------------------
+#> Legenda:
+#> FATOR 1 (parcela):  trat 
+#> FATOR 2 (subparcela):  epoca 
+#> ------------------------------------------------------------------------
+#> 
+#> ------------------------------------------------------------------------
+#> Quadro da analise de variancia
+#> ------------------------------------------------------------------------
+#>             GL         SQ        QM      Fc   Pr(>Fc)    
+#> trat        17   78939770   4643516  1.0456  0.439506    
+#> Bloco        2  206359664 103179832 23.2330 < 2.2e-16 ***
+#> Erro a      34  150997176   4441093                      
+#> epoca        3   90589932  30196644  6.3464  0.000528 ***
+#> trat*epoca  51  303185280   5944809  1.2494  0.167526    
+#> Erro b     108  513870773   4758063                      
+#> Total      215 1343942596                                
+#> ---
+#> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#> ------------------------------------------------------------------------
+#> CV 1 = 6.979684 %
+#> CV 2 = 7.224468 %
+#> 
+#> Interacao nao significativa: analisando os efeitos simples
+#> ------------------------------------------------------------------------
+#> trat
+#> De acordo com o teste F, as medias desse fator sao estatisticamente iguais.
+#> ------------------------------------------------------------------------
+#>    Niveis   Medias
+#> 1       1 29928.96
+#> 2      10 30591.58
+#> 3      11 30038.16
+#> 4      12 28729.28
+#> 5      13 29725.35
+#> 6      14 29150.97
+#> 7      15 29680.45
+#> 8      16 30035.22
+#> 9      17 30209.46
+#> 10     18 31133.35
+#> 11      2 30149.89
+#> 12      3 30614.86
+#> 13      4 30930.97
+#> 14      5 30805.28
+#> 15      6 30781.67
+#> 16      7 29969.70
+#> 17      8 30603.38
+#> 18      9 30399.13
+#> ------------------------------------------------------------------------
+#> epoca
+#> Teste de Scott-Knott
+#> ------------------------------------------------------------------------
+#>   Grupos Tratamentos   Medias
+#> 1      a           4 30661.48
+#> 2      a           3 30591.44
+#> 3      a           5 30439.76
+#> 4      b           1 29080.13
+#> ------------------------------------------------------------------------
+#> 
+#> 
+#> NULL
+#> [1] "========================"
+#> [1] "ndvi"
+#> [1] "========================"
+#> ------------------------------------------------------------------------
+#> Legenda:
+#> FATOR 1 (parcela):  trat 
+#> FATOR 2 (subparcela):  epoca 
+#> ------------------------------------------------------------------------
+#> 
+#> ------------------------------------------------------------------------
+#> Quadro da analise de variancia
+#> ------------------------------------------------------------------------
+#>             GL     SQ       QM      Fc Pr(>Fc)    
+#> trat        17 0.2904 0.017084  0.9752 0.50484    
+#> Bloco        2 0.1679 0.083948  4.7921 0.01467 *  
+#> Erro a      34 0.5956 0.017518                    
+#> epoca        3 0.7029 0.234316 12.7155 < 2e-16 ***
+#> trat*epoca  51 0.6907 0.013542  0.7349 0.88950    
+#> Erro b     108 1.9902 0.018428                    
+#> Total      215 4.4377                             
+#> ---
+#> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#> ------------------------------------------------------------------------
+#> CV 1 = 34.82319 %
+#> CV 2 = 35.71566 %
+#> 
+#> Interacao nao significativa: analisando os efeitos simples
+#> ------------------------------------------------------------------------
+#> trat
+#> De acordo com o teste F, as medias desse fator sao estatisticamente iguais.
+#> ------------------------------------------------------------------------
+#>    Niveis    Medias
+#> 1       1 0.4033830
+#> 2      10 0.2815210
+#> 3      11 0.4238135
+#> 4      12 0.3821632
+#> 5      13 0.3684321
+#> 6      14 0.3950491
+#> 7      15 0.3437409
+#> 8      16 0.3930098
+#> 9      17 0.4319938
+#> 10     18 0.3975051
+#> 11      2 0.3481623
+#> 12      3 0.3718794
+#> 13      4 0.3305334
+#> 14      5 0.4183305
+#> 15      6 0.3652239
+#> 16      7 0.3932397
+#> 17      8 0.3719505
+#> 18      9 0.4215299
+#> ------------------------------------------------------------------------
+#> epoca
+#> Teste de Scott-Knott
+#> ------------------------------------------------------------------------
+#>   Grupos Tratamentos    Medias
+#> 1      a           5 0.4293348
+#> 2      a           4 0.4093195
+#> 3      a           1 0.3985251
+#> 4      b           3 0.2831452
+#> ------------------------------------------------------------------------
+#> 
+#> 
+#> NULL
+#> [1] "========================"
+#> [1] "gndvi"
+#> [1] "========================"
+#> ------------------------------------------------------------------------
+#> Legenda:
+#> FATOR 1 (parcela):  trat 
+#> FATOR 2 (subparcela):  epoca 
+#> ------------------------------------------------------------------------
+#> 
+#> ------------------------------------------------------------------------
+#> Quadro da analise de variancia
+#> ------------------------------------------------------------------------
+#>             GL     SQ       QM      Fc Pr(>Fc)    
+#> trat        17 0.3243 0.019077  1.5395 0.13905    
+#> Bloco        2 0.1076 0.053790  4.3408 0.02094 *  
+#> Erro a      34 0.4213 0.012392                    
+#> epoca        3 0.7603 0.253432 21.5651 < 2e-16 ***
+#> trat*epoca  51 0.4745 0.009304  0.7917 0.82279    
+#> Erro b     108 1.2692 0.011752                    
+#> Total      215 3.3572                             
+#> ---
+#> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#> ------------------------------------------------------------------------
+#> CV 1 = 37.98195 %
+#> CV 2 = 36.98846 %
+#> 
+#> Interacao nao significativa: analisando os efeitos simples
+#> ------------------------------------------------------------------------
+#> trat
+#> De acordo com o teste F, as medias desse fator sao estatisticamente iguais.
+#> ------------------------------------------------------------------------
+#>    Niveis    Medias
+#> 1       1 0.3366799
+#> 2      10 0.2192938
+#> 3      11 0.3550788
+#> 4      12 0.2371858
+#> 5      13 0.2738915
+#> 6      14 0.2500863
+#> 7      15 0.2694316
+#> 8      16 0.2825102
+#> 9      17 0.3069775
+#> 10     18 0.3326011
+#> 11      2 0.2975743
+#> 12      3 0.3020449
+#> 13      4 0.2518595
+#> 14      5 0.3432018
+#> 15      6 0.2594034
+#> 16      7 0.2997925
+#> 17      8 0.3267865
+#> 18      9 0.3310653
+#> ------------------------------------------------------------------------
+#> epoca
+#> Teste de Scott-Knott
+#> ------------------------------------------------------------------------
+#>   Grupos Tratamentos    Medias
+#> 1      a           5 0.3772415
+#> 2      b           4 0.3109852
+#> 3      c           1 0.2691374
+#> 4      d           3 0.2149613
+#> ------------------------------------------------------------------------
+#> 
+#> 
+#> NULL
+#> [1] "========================"
+#> [1] "savi"
+#> [1] "========================"
+#> ------------------------------------------------------------------------
+#> Legenda:
+#> FATOR 1 (parcela):  trat 
+#> FATOR 2 (subparcela):  epoca 
+#> ------------------------------------------------------------------------
+#> 
+#> ------------------------------------------------------------------------
+#> Quadro da analise de variancia
+#> ------------------------------------------------------------------------
+#>             GL      SQ      QM      Fc Pr(>Fc)    
+#> trat        17  0.5935 0.03491  0.8665 0.61323    
+#> Bloco        2  0.3191 0.15954  3.9601 0.02844 *  
+#> Erro a      34  1.3698 0.04029                    
+#> epoca        3  1.6681 0.55605 12.4357 < 2e-16 ***
+#> trat*epoca  51  1.9262 0.03777  0.8447 0.74670    
+#> Erro b     108  4.8291 0.04471                    
+#> Total      215 10.7057                            
+#> ---
+#> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#> ------------------------------------------------------------------------
+#> CV 1 = 35.82174 %
+#> CV 2 = 37.7384 %
+#> 
+#> Interacao nao significativa: analisando os efeitos simples
+#> ------------------------------------------------------------------------
+#> trat
+#> De acordo com o teste F, as medias desse fator sao estatisticamente iguais.
+#> ------------------------------------------------------------------------
+#>    Niveis    Medias
+#> 1       1 0.6039454
+#> 2      10 0.4222780
+#> 3      11 0.5820586
+#> 4      12 0.5732406
+#> 5      13 0.5526439
+#> 6      14 0.5555959
+#> 7      15 0.5156074
+#> 8      16 0.5895103
+#> 9      17 0.6479858
+#> 10     18 0.5962532
+#> 11      2 0.5222394
+#> 12      3 0.5578149
+#> 13      4 0.4957961
+#> 14      5 0.6274912
+#> 15      6 0.5478317
+#> 16      7 0.5898554
+#> 17      8 0.5044575
+#> 18      9 0.6011676
+#> ------------------------------------------------------------------------
+#> epoca
+#> Teste de Scott-Knott
+#> ------------------------------------------------------------------------
+#>   Grupos Tratamentos    Medias
+#> 1      a           5 0.6439972
+#> 2      a           4 0.5940999
+#> 3      a           1 0.5906176
+#> 4      b           3 0.4125682
+#> ------------------------------------------------------------------------
+#> 
+#> 
+#> NULL
+#> [1] "========================"
+#> [1] "vari"
+#> [1] "========================"
+#> ------------------------------------------------------------------------
+#> Legenda:
+#> FATOR 1 (parcela):  trat 
+#> FATOR 2 (subparcela):  epoca 
+#> ------------------------------------------------------------------------
+#> 
+#> ------------------------------------------------------------------------
+#> Quadro da analise de variancia
+#> ------------------------------------------------------------------------
+#>             GL      SQ       QM     Fc   Pr(>Fc)    
+#> trat        17 0.14283 0.008402  3.421  0.001107 ** 
+#> Bloco        2 0.02029 0.010146  4.131  0.024768 *  
+#> Erro a      34 0.08350 0.002456                     
+#> epoca        3 0.25154 0.083847 32.180 < 2.2e-16 ***
+#> trat*epoca  51 0.17573 0.003446  1.322  0.113935    
+#> Erro b     108 0.28140 0.002606                     
+#> Total      215 0.95530                              
+#> ---
+#> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#> ------------------------------------------------------------------------
+#> CV 1 = 51.11635 %
+#> CV 2 = 52.64972 %
+#> 
+#> Interacao nao significativa: analisando os efeitos simples
+#> ------------------------------------------------------------------------
+#> trat
+#> Teste de Scott-Knott
+#> ------------------------------------------------------------------------
+#>    Grupos Tratamentos     Medias
+#> 1       a          12 0.15764429
+#> 2       a          17 0.14262577
+#> 3       b          16 0.12185047
+#> 4       b           6 0.11640278
+#> 5       b          14 0.11523442
+#> 6       b          13 0.10561157
+#> 7       b           7 0.10504350
+#> 8       b           9 0.10334848
+#> 9       c          15 0.09504100
+#> 10      c           5 0.08745236
+#> 11      c           4 0.08400298
+#> 12      c           3 0.07954623
+#> 13      c          11 0.07908734
+#> 14      c           1 0.07580187
+#> 15      c           8 0.07575239
+#> 16      c          18 0.07384013
+#> 17      c          10 0.06873162
+#> 18      c           2 0.05811386
+#> ------------------------------------------------------------------------
+#> 
+#> epoca
+#> Teste de Scott-Knott
+#> ------------------------------------------------------------------------
+#>   Grupos Tratamentos    Medias
+#> 1      a           1 0.1453534
+#> 2      b           4 0.1108539
+#> 3      c           3 0.0753210
+#> 4      d           5 0.0562786
+#> ------------------------------------------------------------------------
+#> 
+#> 
+#> NULL
 ```
-&#10;![](README_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
 
-![](README_files/figure-gfm/unnamed-chunk-8-2.png)<!-- -->
+## Análise de Correlação Linear entre as variáveis
 
-    #> 
+### Juntando as bases
+
+``` r
+data_set <- data_set_mult |> 
+  left_join( data_set_bt |> 
+               rename(rep = bloco),
+             by = c("designacao","rep"))
+```
+
+``` r
+walk(c(1,3:5), ~{
+  dfau <- data_set |> 
+    filter(epoca == .x) |> 
+    select(r:tmspa_percent) 
+  
+  dfau_cor <- cor(dfau) 
+  
+  corrplot::corrplot(dfau_cor, method = "color",
+         outline = TRUE,
+         addgrid.col = "darkgray", cl.pos = "r", tl.col = "black",
+         tl.cex = 1, cl.cex = 1, type = "upper", bg="azure2",
+         diag = FALSE,
+         cl.ratio = 0.2,
+         cl.length = 5,
+         number.cex = 0.8)
+})
+```
+
+![](README_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-9-2.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-9-3.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-9-4.png)<!-- -->
+\## Análise de agrupamento hierárquico - Por época
+
+``` r
+map(c(1,3:5), ~{
+  print("========================")
+  print(paste0("Época: ",.x))
+  print("========================")
+  da_pad<-decostand(  data_set |> 
+    filter(epoca == .x) |> 
+    select(r:tmspa_percent) , 
+                  method = "standardize",
+                  na.rm=TRUE)
+  labs <- data_set |> filter(epoca == .x) |> pull(designacao)
+  da_pad_euc<-vegdist(da_pad,"euclidean") 
+  da_pad_euc_ward<-hclust(da_pad_euc, method="ward.D")
+  plot(da_pad_euc_ward,labels = labs,
+     ylab="Distancia Euclidiana",
+     xlab="Acessos", hang=-1,
+     col="blue", las=1,
+     cex=.6,lwd=1.5)
+}) 
+#> [1] "========================"
+#> [1] "Época: 1"
+#> [1] "========================"
+```
+
+![](README_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
+
+    #> [1] "========================"
+    #> [1] "Época: 3"
+    #> [1] "========================"
+
+![](README_files/figure-gfm/unnamed-chunk-10-2.png)<!-- -->
+
+    #> [1] "========================"
+    #> [1] "Época: 4"
+    #> [1] "========================"
+
+![](README_files/figure-gfm/unnamed-chunk-10-3.png)<!-- -->
+
+    #> [1] "========================"
+    #> [1] "Época: 5"
+    #> [1] "========================"
+
+![](README_files/figure-gfm/unnamed-chunk-10-4.png)<!-- -->
+
+    #> [[1]]
     #> NULL
-    #> [1] "========================"
-    #> [1] "r  Época:  3"
-    #> [1] "========================"
-    #> Analysis of Variance Table
     #> 
-    #> Response: y
-    #>           Df   Sum Sq Mean Sq F value Pr(>F)
-    #> trat      17 25991312 1528901  0.9059 0.5732
-    #> bloco      2   424308  212154  0.1257 0.8823
-    #> Residuals 34 57383904 1687762
-
-![](README_files/figure-gfm/unnamed-chunk-8-3.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-8-4.png)<!-- -->
-
-    #> 
+    #> [[2]]
     #> NULL
-    #> [1] "========================"
-    #> [1] "r  Época:  4"
-    #> [1] "========================"
-    #> Analysis of Variance Table
     #> 
-    #> Response: y
-    #>           Df   Sum Sq Mean Sq F value  Pr(>F)  
-    #> trat      17 16715382  983258  0.6756 0.80376  
-    #> bloco      2 12998996 6499498  4.4655 0.01897 *
-    #> Residuals 34 49486177 1455476                  
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-5.png)<!-- -->
-
-    #> # A tibble: 2 × 5
-    #>   designacao   rep      r    rs     yp
-    #>        <dbl> <dbl>  <dbl> <dbl>  <dbl>
-    #> 1         11     3 17365. -3.49 20264.
-    #> 2         17     1 15763. -3.40 18608.
-
-![](README_files/figure-gfm/unnamed-chunk-8-6.png)<!-- -->
-
-    #> 
+    #> [[3]]
     #> NULL
-    #> [1] "========================"
-    #> [1] "r  Época:  5"
-    #> [1] "========================"
-    #> Analysis of Variance Table
     #> 
-    #> Response: y
-    #>           Df  Sum Sq Mean Sq F value  Pr(>F)  
-    #> trat      17 8805500  517971  2.2145 0.02377 *
-    #> bloco      2  680080  340040  1.4538 0.24784  
-    #> Residuals 34 7952509  233897                  
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-7.png)<!-- -->
-
-    #> # A tibble: 1 × 5
-    #>   designacao   rep     r    rs     yp
-    #>        <dbl> <dbl> <dbl> <dbl>  <dbl>
-    #> 1         14     3 18611 -3.87 19862.
-
-![](README_files/figure-gfm/unnamed-chunk-8-8.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "g  Época:  1"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df    Sum Sq  Mean Sq F value    Pr(>F)    
-    #> trat      17 419963521 24703737  4.6480 6.915e-05 ***
-    #> bloco      2  44315094 22157547  4.1689   0.02403 *  
-    #> Residuals 34 180706732  5314904                      
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-9.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-8-10.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "g  Época:  3"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df    Sum Sq  Mean Sq F value Pr(>F)
-    #> trat      17 230547651 13561627  0.7708 0.7112
-    #> bloco      2  74577442 37288721  2.1194 0.1357
-    #> Residuals 34 598189176 17593799
-
-![](README_files/figure-gfm/unnamed-chunk-8-11.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-8-12.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "g  Época:  4"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df    Sum Sq   Mean Sq F value    Pr(>F)    
-    #> trat      17 214544068  12620239  2.2931   0.01933 *  
-    #> bloco      2 634036677 317018338 57.6010 1.205e-11 ***
-    #> Residuals 34 187125473   5503690                      
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-13.png)<!-- -->
-
-    #> # A tibble: 1 × 5
-    #>   designacao   rep      g    rs     yp
-    #>        <dbl> <dbl>  <dbl> <dbl>  <dbl>
-    #> 1         12     1 20955. -3.74 26877.
-
-![](README_files/figure-gfm/unnamed-chunk-8-14.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "g  Época:  5"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df    Sum Sq  Mean Sq F value    Pr(>F)    
-    #> trat      17 120513568  7089033  7.1277 6.757e-07 ***
-    #> bloco      2  54704500 27352250 27.5013 7.858e-08 ***
-    #> Residuals 34  33815675   994579                      
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-15.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-8-16.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "b  Época:  1"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df  Sum Sq Mean Sq F value   Pr(>F)   
-    #> trat      17 2240.05  131.77  1.8717 0.058792 . 
-    #> bloco      2  841.87  420.94  5.9793 0.005955 **
-    #> Residuals 34 2393.56   70.40                    
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-17.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-8-18.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "b  Época:  3"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df  Sum Sq Mean Sq F value   Pr(>F)   
-    #> trat      17 1410.71  82.983  2.4141 0.014061 * 
-    #> bloco      2  477.33 238.663  6.9431 0.002962 **
-    #> Residuals 34 1168.71  34.374                    
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-19.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-8-20.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "b  Época:  4"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df  Sum Sq Mean Sq F value Pr(>F)
-    #> trat      17  437.07  25.710  0.8548 0.6253
-    #> bloco      2   32.39  16.192  0.5383 0.5886
-    #> Residuals 34 1022.66  30.078
-
-![](README_files/figure-gfm/unnamed-chunk-8-21.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-8-22.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "b  Época:  5"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df  Sum Sq Mean Sq F value  Pr(>F)  
-    #> trat      17 164.538  9.6787  1.6897 0.09462 .
-    #> bloco      2  37.261 18.6304  3.2525 0.05099 .
-    #> Residuals 34 194.755  5.7281                  
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-23.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-8-24.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "nir  Época:  1"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df     Sum Sq   Mean Sq F value  Pr(>F)  
-    #> trat      17 2002243348 117779020  1.7418 0.08264 .
-    #> bloco      2  697728463 348864231  5.1592 0.01105 *
-    #> Residuals 34 2299071503  67619750                  
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-25.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-8-26.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "nir  Época:  3"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df     Sum Sq   Mean Sq F value Pr(>F)
-    #> trat      17 4.2379e+09 249290192  0.7803 0.7016
-    #> bloco      2 1.1116e+09 555778907  1.7397 0.1908
-    #> Residuals 34 1.0862e+10 319471672
-
-![](README_files/figure-gfm/unnamed-chunk-8-27.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-8-28.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "nir  Época:  4"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df     Sum Sq    Mean Sq F value    Pr(>F)    
-    #> trat      17 1615335174   95019716  0.8012    0.6803    
-    #> bloco      2 7208514536 3604257268 30.3893 2.698e-08 ***
-    #> Residuals 34 4032498947  118602910                      
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-29.png)<!-- -->
-
-    #> # A tibble: 1 × 5
-    #>   designacao   rep    nir    rs     yp
-    #>        <dbl> <dbl>  <dbl> <dbl>  <dbl>
-    #> 1         14     2 22381. -3.34 47697.
-
-![](README_files/figure-gfm/unnamed-chunk-8-30.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "nir  Época:  5"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df    Sum Sq  Mean Sq F value    Pr(>F)    
-    #> trat      17 192219117 11307007  3.5008 0.0009145 ***
-    #> bloco      2 137588642 68794321 21.2994 1.008e-06 ***
-    #> Residuals 34 109815848  3229878                      
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-31.png)<!-- -->
-
-    #> # A tibble: 1 × 5
-    #>   designacao   rep    nir    rs     yp
-    #>        <dbl> <dbl>  <dbl> <dbl>  <dbl>
-    #> 1         14     1 50314.  4.91 44912.
-
-![](README_files/figure-gfm/unnamed-chunk-8-32.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "red_edge  Época:  1"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df    Sum Sq  Mean Sq F value    Pr(>F)    
-    #> trat      17 192002996 11294294  1.7199 0.0874683 .  
-    #> bloco      2 154738631 77369316 11.7822 0.0001296 ***
-    #> Residuals 34 223265913  6566644                      
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-33.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-8-34.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "red_edge  Época:  3"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df    Sum Sq  Mean Sq F value   Pr(>F)   
-    #> trat      17  78862732  4638984  1.0838 0.406185   
-    #> bloco      2  71292735 35646367  8.3280 0.001139 **
-    #> Residuals 34 145530400  4280306                    
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-35.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-8-36.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "red_edge  Época:  4"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df   Sum Sq  Mean Sq F value   Pr(>F)   
-    #> trat      17 47431346  2790079  1.0619 0.425073   
-    #> bloco      2 35541201 17770601  6.7635 0.003366 **
-    #> Residuals 34 89332457  2627425                    
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-37.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-8-38.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "red_edge  Época:  5"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df    Sum Sq  Mean Sq F value  Pr(>F)  
-    #> trat      17  63827976  3754587  1.0038 0.47767  
-    #> bloco      2  24359402 12179701  3.2564 0.05082 .
-    #> Residuals 34 127166875  3740202                  
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-39.png)<!-- -->
-
-    #> # A tibble: 2 × 5
-    #>   designacao   rep red_edge    rs     yp
-    #>        <dbl> <dbl>    <dbl> <dbl>  <dbl>
-    #> 1         13     1   23867. -3.11 28128.
-    #> 2         14     3   24213. -3.22 28593.
-
-![](README_files/figure-gfm/unnamed-chunk-8-40.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "ndvi  Época:  1"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df   Sum Sq  Mean Sq F value  Pr(>F)  
-    #> trat      17 0.244324 0.014372  1.8589 0.06081 .
-    #> bloco      2 0.079565 0.039783  5.1455 0.01116 *
-    #> Residuals 34 0.262872 0.007732                  
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-41.png)<!-- -->
-
-    #> # A tibble: 1 × 5
-    #>   designacao   rep   ndvi    rs    yp
-    #>        <dbl> <dbl>  <dbl> <dbl> <dbl>
-    #> 1          7     2 0.0137 -3.66 0.232
-
-![](README_files/figure-gfm/unnamed-chunk-8-42.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "ndvi  Época:  3"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df  Sum Sq  Mean Sq F value Pr(>F)
-    #> trat      17 0.60348 0.035499  0.9504 0.5290
-    #> bloco      2 0.09947 0.049734  1.3314 0.2775
-    #> Residuals 34 1.27002 0.037354
-
-![](README_files/figure-gfm/unnamed-chunk-8-43.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-8-44.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "ndvi  Época:  4"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df  Sum Sq Mean Sq F value    Pr(>F)    
-    #> trat      17 0.12135 0.00714  0.7509    0.7312    
-    #> bloco      2 0.70167 0.35084 36.9073 3.017e-09 ***
-    #> Residuals 34 0.32320 0.00951                      
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-45.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-8-46.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "ndvi  Época:  5"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df    Sum Sq    Mean Sq F value    Pr(>F)    
-    #> trat      17 0.0119208 0.00070122  2.2269 0.0230085 *  
-    #> bloco      2 0.0062025 0.00310124  9.8489 0.0004226 ***
-    #> Residuals 34 0.0107060 0.00031488                      
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-47.png)<!-- -->
-
-    #> # A tibble: 1 × 5
-    #>   designacao   rep  ndvi    rs    yp
-    #>        <dbl> <dbl> <dbl> <dbl> <dbl>
-    #> 1         14     3  0.33 -4.62 0.381
-
-![](README_files/figure-gfm/unnamed-chunk-8-48.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "gndvi  Época:  1"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df   Sum Sq   Mean Sq F value   Pr(>F)   
-    #> trat      17 0.127282 0.0074872  2.2241 0.023184 * 
-    #> bloco      2 0.039665 0.0198325  5.8912 0.006357 **
-    #> Residuals 34 0.114460 0.0033665                    
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-49.png)<!-- -->
-
-    #> # A tibble: 1 × 5
-    #>   designacao   rep  gndvi    rs    yp
-    #>        <dbl> <dbl>  <dbl> <dbl> <dbl>
-    #> 1          7     2 0.0116 -3.74 0.158
-
-![](README_files/figure-gfm/unnamed-chunk-8-50.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "gndvi  Época:  3"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df  Sum Sq  Mean Sq F value Pr(>F)
-    #> trat      17 0.40734 0.023961  0.9694 0.5104
-    #> bloco      2 0.06240 0.031198  1.2622 0.2959
-    #> Residuals 34 0.84037 0.024717
-
-![](README_files/figure-gfm/unnamed-chunk-8-51.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-8-52.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "gndvi  Época:  4"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df  Sum Sq  Mean Sq F value    Pr(>F)    
-    #> trat      17 0.20303 0.011943  1.1162    0.3792    
-    #> bloco      2 0.36018 0.180091 16.8316 8.301e-06 ***
-    #> Residuals 34 0.36378 0.010700                      
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-53.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-8-54.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "gndvi  Época:  5"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df   Sum Sq   Mean Sq F value    Pr(>F)    
-    #> trat      17 0.061134 0.0035961  7.4827 3.797e-07 ***
-    #> bloco      2 0.000905 0.0004524  0.9413    0.4001    
-    #> Residuals 34 0.016340 0.0004806                      
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-55.png)<!-- -->
-
-    #> # A tibble: 1 × 5
-    #>   designacao   rep gndvi    rs    yp
-    #>        <dbl> <dbl> <dbl> <dbl> <dbl>
-    #> 1         14     1 0.332  4.13 0.273
-
-![](README_files/figure-gfm/unnamed-chunk-8-56.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "savi  Época:  1"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df  Sum Sq  Mean Sq F value  Pr(>F)  
-    #> trat      17 0.60489 0.035582  1.7927 0.07235 .
-    #> bloco      2 0.12407 0.062033  3.1253 0.05675 .
-    #> Residuals 34 0.67484 0.019848                  
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-57.png)<!-- -->
-
-    #> # A tibble: 2 × 5
-    #>   designacao   rep   savi    rs    yp
-    #>        <dbl> <dbl>  <dbl> <dbl> <dbl>
-    #> 1          7     2 0.0206 -3.44 0.356
-    #> 2          9     2 0.727   3.25 0.406
-
-![](README_files/figure-gfm/unnamed-chunk-8-58.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "savi  Época:  3"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df  Sum Sq  Mean Sq F value Pr(>F)
-    #> trat      17 1.32159 0.077740  0.8982 0.5810
-    #> bloco      2 0.21803 0.109017  1.2595 0.2967
-    #> Residuals 34 2.94282 0.086553
-
-![](README_files/figure-gfm/unnamed-chunk-8-59.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-8-60.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "savi  Época:  4"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df  Sum Sq Mean Sq F value    Pr(>F)    
-    #> trat      17 0.56635 0.03331  0.9672    0.5126    
-    #> bloco      2 1.34900 0.67450 19.5821 2.198e-06 ***
-    #> Residuals 34 1.17112 0.03444                      
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-61.png)<!-- -->
-
-    #> # A tibble: 1 × 5
-    #>   designacao   rep   savi    rs    yp
-    #>        <dbl> <dbl>  <dbl> <dbl> <dbl>
-    #> 1         14     2 0.0903 -3.14 0.502
-
-![](README_files/figure-gfm/unnamed-chunk-8-62.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "savi  Época:  5"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df   Sum Sq   Mean Sq F value    Pr(>F)    
-    #> trat      17 0.026821 0.0015777  2.2270 0.0230071 *  
-    #> bloco      2 0.013955 0.0069777  9.8491 0.0004225 ***
-    #> Residuals 34 0.024088 0.0007085                      
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-63.png)<!-- -->
-
-    #> # A tibble: 1 × 5
-    #>   designacao   rep  savi    rs    yp
-    #>        <dbl> <dbl> <dbl> <dbl> <dbl>
-    #> 1         14     3 0.495 -4.62 0.572
-
-![](README_files/figure-gfm/unnamed-chunk-8-64.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "vari  Época:  1"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df   Sum Sq   Mean Sq F value    Pr(>F)    
-    #> trat      17 0.088754 0.0052208  3.4681 0.0009889 ***
-    #> bloco      2 0.008653 0.0043264  2.8739 0.0702758 .  
-    #> Residuals 34 0.051184 0.0015054                      
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-65.png)<!-- -->
-
-    #> # A tibble: 1 × 5
-    #>   designacao   rep    vari    rs     yp
-    #>        <dbl> <dbl>   <dbl> <dbl>  <dbl>
-    #> 1          7     2 0.00147 -3.02 0.0850
-
-![](README_files/figure-gfm/unnamed-chunk-8-66.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "vari  Época:  3"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df   Sum Sq   Mean Sq F value Pr(>F)
-    #> trat      17 0.101124 0.0059485  1.0934 0.3981
-    #> bloco      2 0.016702 0.0083508  1.5350 0.2300
-    #> Residuals 34 0.184975 0.0054404
-
-![](README_files/figure-gfm/unnamed-chunk-8-67.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-8-68.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "vari  Época:  4"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df   Sum Sq   Mean Sq F value    Pr(>F)    
-    #> trat      17 0.086638 0.0050964  3.7624 0.0004934 ***
-    #> bloco      2 0.061210 0.0306052 22.5946 5.726e-07 ***
-    #> Residuals 34 0.046054 0.0013545                      
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-69.png)<!-- -->
-
-    #> # A tibble: 1 × 5
-    #>   designacao   rep  vari    rs    yp
-    #>        <dbl> <dbl> <dbl> <dbl> <dbl>
-    #> 1         13     1 0.190  3.25 0.106
-
-![](README_files/figure-gfm/unnamed-chunk-8-70.png)<!-- -->
-
-    #> 
-    #> NULL
-    #> [1] "========================"
-    #> [1] "vari  Época:  5"
-    #> [1] "========================"
-    #> Analysis of Variance Table
-    #> 
-    #> Response: y
-    #>           Df   Sum Sq   Mean Sq F value    Pr(>F)    
-    #> trat      17 0.042047 0.0024733  9.3999 2.253e-08 ***
-    #> bloco      2 0.007475 0.0037376 14.2048 3.280e-05 ***
-    #> Residuals 34 0.008946 0.0002631                      
-    #> ---
-    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-
-![](README_files/figure-gfm/unnamed-chunk-8-71.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-8-72.png)<!-- -->
-
-    #> 
+    #> [[4]]
     #> NULL
 
-–\>
+## Componentes principais - Por época
+
+``` r
+map(c(1,3:5), ~{
+  print("========================")
+  print(paste0("Época: ",.x))
+  print("========================")
+  print("======== Análise de Componentes Principais ========== ")
+  da_pad<-decostand(  data_set |> 
+    filter(epoca == .x) |> 
+    select(r:tmspa_percent) , 
+                  method = "standardize",
+                  na.rm=TRUE)
+  pca <-  prcomp(da_pad,scale.=TRUE)
+  # Autovalores
+  eig<-pca$sdev^2
+  print("==== Autovalores ====")
+  print(round(eig,3))
+  print("==== % da variância explicada ====")
+  ve<-eig/sum(eig)
+  print(round(ve,4))
+  print("==== % da variância explicada acumulada ====")
+  print(round(cumsum(ve),4)*100)
+  print("==== Poder Discriminante ====")
+  mcor<-cor(da_pad,pca$x)
+  corrplot::corrplot(mcor)
+  print("==== screeplot ====")
+  screeplot(pca)
+  abline(h=1)
+  labs <- data_set |> filter(epoca == .x) |> pull(designacao)
+  pc1V<-cor(da_pad,pca$x)[,1]/sd(cor(da_pad,pca$x)[,1])
+  pc2V<-cor(da_pad,pca$x)[,2]/sd(cor(da_pad,pca$x)[,2])
+  pc1c<-pca$x[,1]/sd(pca$x[,1])
+  pc2c<-pca$x[,2]/sd(pca$x[,2])
+  nv<-ncol(da_pad) # número de variáveis utilizadas na análise
+  bip<-data.frame(pc1c,pc2c,labs)
+  texto <- data.frame(
+    x = pc1V,
+    y = pc2V,
+    # z = pc3V,
+    label = names(da_pad)
+  )
+  
+  bi_plot <- bip |>
+    ggplot(aes(x=pc1c,y=pc2c))+
+    # geom_point() +
+    theme_minimal() +
+    geom_text(aes(label = labs), vjust = -0.5, size = 3) +  # nomes dos tratamentos
+    # # scale_shape_manual(values=16:18)+
+    # # scale_color_manual(values=c("#009E73", "#999999","#D55E00")) +
+    annotate(geom="text", x=pc1V, y=pc2V, label=names(pc1V),
+              color="black",font=3) +
+    geom_vline(aes(xintercept=0),
+                color="black", size=1)+
+    geom_hline(aes(yintercept=0),
+                color="black", size=1) +
+    annotate(geom="segment",
+              x=rep(0,length(da_pad)),
+              xend=texto$x,
+              y=rep(0,length(da_pad)),
+              yend=texto$y,color="black",lwd=.5) +
+    geom_label(data=texto,aes(x=x,y=y,label=label),
+               color="black",angle=0,fontface="bold",size=4,fill="white") +
+    labs(x=paste("CP1 (",round(100*ve[1],2),"%)",sep=""),
+         y=paste("CP2 (",round(100*ve[2],2),"%)",sep=""))+
+    theme(legend.position = "top")
+  # bi_plot +
+  #   coord_cartesian(
+  #     xlim = c(-4,3),
+  #     ylim = c(-3,8)
+  #   )
+}) 
+#> [1] "========================"
+#> [1] "Época: 1"
+#> [1] "========================"
+#> [1] "======== Análise de Componentes Principais ========== "
+#> [1] "==== Autovalores ===="
+#>  [1] 6.954 5.148 2.853 2.247 1.793 1.163 0.938 0.867 0.782 0.485 0.320 0.231
+#> [13] 0.095 0.071 0.026 0.013 0.011 0.003 0.000 0.000 0.000 0.000 0.000 0.000
+#> [1] "==== % da variância explicada ===="
+#>  [1] 0.2897 0.2145 0.1189 0.0936 0.0747 0.0485 0.0391 0.0361 0.0326 0.0202
+#> [11] 0.0133 0.0096 0.0040 0.0029 0.0011 0.0006 0.0005 0.0001 0.0000 0.0000
+#> [21] 0.0000 0.0000 0.0000 0.0000
+#> [1] "==== % da variância explicada acumulada ===="
+#>  [1]  28.97  50.42  62.31  71.67  79.15  83.99  87.90  91.51  94.77  96.79
+#> [11]  98.12  99.09  99.48  99.78  99.88  99.94  99.99 100.00 100.00 100.00
+#> [21] 100.00 100.00 100.00 100.00
+#> [1] "==== Poder Discriminante ===="
+```
+
+![](README_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
+
+    #> [1] "==== screeplot ===="
+
+![](README_files/figure-gfm/unnamed-chunk-11-2.png)<!-- -->
+
+    #> [1] "========================"
+    #> [1] "Época: 3"
+    #> [1] "========================"
+    #> [1] "======== Análise de Componentes Principais ========== "
+    #> [1] "==== Autovalores ===="
+    #>  [1] 6.835 4.638 3.060 2.335 1.843 1.405 0.994 0.792 0.602 0.536 0.446 0.248
+    #> [13] 0.095 0.073 0.046 0.023 0.016 0.010 0.001 0.000 0.000 0.000 0.000 0.000
+    #> [1] "==== % da variância explicada ===="
+    #>  [1] 0.2848 0.1933 0.1275 0.0973 0.0768 0.0585 0.0414 0.0330 0.0251 0.0223
+    #> [11] 0.0186 0.0103 0.0040 0.0031 0.0019 0.0009 0.0007 0.0004 0.0000 0.0000
+    #> [21] 0.0000 0.0000 0.0000 0.0000
+    #> [1] "==== % da variância explicada acumulada ===="
+    #>  [1]  28.48  47.81  60.56  70.29  77.97  83.82  87.96  91.26  93.77  96.01
+    #> [11]  97.87  98.90  99.30  99.60  99.79  99.89  99.95 100.00 100.00 100.00
+    #> [21] 100.00 100.00 100.00 100.00
+    #> [1] "==== Poder Discriminante ===="
+
+![](README_files/figure-gfm/unnamed-chunk-11-3.png)<!-- -->
+
+    #> [1] "==== screeplot ===="
+
+![](README_files/figure-gfm/unnamed-chunk-11-4.png)<!-- -->
+
+    #> [1] "========================"
+    #> [1] "Época: 4"
+    #> [1] "========================"
+    #> [1] "======== Análise de Componentes Principais ========== "
+    #> [1] "==== Autovalores ===="
+    #>  [1] 6.781 5.076 2.702 2.245 1.799 1.274 0.950 0.765 0.732 0.663 0.366 0.256
+    #> [13] 0.154 0.078 0.065 0.047 0.019 0.017 0.010 0.000 0.000 0.000 0.000 0.000
+    #> [1] "==== % da variância explicada ===="
+    #>  [1] 0.2826 0.2115 0.1126 0.0935 0.0750 0.0531 0.0396 0.0319 0.0305 0.0276
+    #> [11] 0.0153 0.0107 0.0064 0.0033 0.0027 0.0019 0.0008 0.0007 0.0004 0.0000
+    #> [21] 0.0000 0.0000 0.0000 0.0000
+    #> [1] "==== % da variância explicada acumulada ===="
+    #>  [1]  28.26  49.41  60.67  70.02  77.51  82.82  86.78  89.97  93.02  95.78
+    #> [11]  97.31  98.38  99.02  99.34  99.61  99.81  99.89  99.96 100.00 100.00
+    #> [21] 100.00 100.00 100.00 100.00
+    #> [1] "==== Poder Discriminante ===="
+
+![](README_files/figure-gfm/unnamed-chunk-11-5.png)<!-- -->
+
+    #> [1] "==== screeplot ===="
+
+![](README_files/figure-gfm/unnamed-chunk-11-6.png)<!-- -->
+
+    #> [1] "========================"
+    #> [1] "Época: 5"
+    #> [1] "========================"
+    #> [1] "======== Análise de Componentes Principais ========== "
+    #> [1] "==== Autovalores ===="
+    #>  [1] 6.982 3.910 2.874 2.440 1.822 1.720 1.002 0.867 0.765 0.578 0.487 0.262
+    #> [13] 0.137 0.088 0.026 0.022 0.013 0.005 0.000 0.000 0.000 0.000 0.000 0.000
+    #> [1] "==== % da variância explicada ===="
+    #>  [1] 0.2909 0.1629 0.1198 0.1017 0.0759 0.0717 0.0417 0.0361 0.0319 0.0241
+    #> [11] 0.0203 0.0109 0.0057 0.0037 0.0011 0.0009 0.0005 0.0002 0.0000 0.0000
+    #> [21] 0.0000 0.0000 0.0000 0.0000
+    #> [1] "==== % da variância explicada acumulada ===="
+    #>  [1]  29.09  45.38  57.36  67.53  75.12  82.29  86.46  90.08  93.26  95.67
+    #> [11]  97.70  98.79  99.36  99.72  99.83  99.92  99.98 100.00 100.00 100.00
+    #> [21] 100.00 100.00 100.00 100.00
+    #> [1] "==== Poder Discriminante ===="
+
+![](README_files/figure-gfm/unnamed-chunk-11-7.png)<!-- -->
+
+    #> [1] "==== screeplot ===="
+
+![](README_files/figure-gfm/unnamed-chunk-11-8.png)<!-- -->
+
+    #> [[1]]
+
+![](README_files/figure-gfm/unnamed-chunk-11-9.png)<!-- -->
+
+    #> 
+    #> [[2]]
+
+![](README_files/figure-gfm/unnamed-chunk-11-10.png)<!-- -->
+
+    #> 
+    #> [[3]]
+
+![](README_files/figure-gfm/unnamed-chunk-11-11.png)<!-- -->
+
+    #> 
+    #> [[4]]
+
+![](README_files/figure-gfm/unnamed-chunk-11-12.png)<!-- -->

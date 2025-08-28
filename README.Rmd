@@ -17,41 +17,22 @@ knitr::opts_chunk$set(
 # Análise - Doutorado - Edvaldo Aldo Litos Paulo Nhanombe
 
 
-## Pré-tratamento dos dados
-```{r}
-dados_batata <- readxl::read_xlsx("data-raw/Exp. Verão-2024_25.xlsx") |> 
-  janitor::clean_names()
-readr::write_rds(dados_batata,"data/batata-doce-ednaldo.rds")
-
-dados_multi <- readxl::read_xlsx("data-raw/HTP_Verão.xlsx") |> 
-  janitor::clean_names()
-readr::write_rds(dados_multi,"data/batata-doce-multiespectral.rds")
-```
-
-
-
-## Análise exploratória - Batata Doce
+## Análise de variância - Batata Doce
 
 ### Carregando pacotes e banco de dados
 
-```{r,eval=FALSE}
+```{r,eval=TRUE}
 library(tidyverse)
-data_set <- read_rds("data/batata-doce-ednaldo.rds")
-glimpse(data_set)
+library(vegan)
+library(ExpDes.pt)
+data_set_bt <- read_rds("data/batata-doce-ednaldo.rds")
+glimpse(data_set_bt)
 ```
 
 ```{r,eval=FALSE}
-lista_variaveis <- data_set |> select(pt:tmspa_percent) |> names()
-# map(lista_variaveis, ~{
-#   data_set |> 
-#     ggplot(aes(x=!!sym(.x), y = ..density..)) +
-#     geom_histogram(color="black",fill="gray", bins = 15) +
-#     labs(title = .x) +
-#     theme_bw()
-# })
+lista_variaveis <- data_set_bt |> select(pt:tmspa_percent) |> names()
 ```
 
-<!--
 ### Análise de resíduos - Pré-supostos da ANOVA
 
 ```{r,eval=FALSE}
@@ -59,54 +40,13 @@ map(lista_variaveis, ~{
   print("========================")
   print(.x)
   print("========================")
-  y <- data_set |> pull(!!sym(.x))
-  trat <- data_set |> pull(designacao) |> as_factor()
-  bloco <- data_set |> pull(bloco) |> as_factor()
-  mod <- aov(y ~ trat + bloco)
-  print(anova(mod))
-  rs <- rstudent(mod)
-  yp <- predict(mod)
-  sw_test <- shapiro.test(rs)
-  sw_test <- round(sw_test$p.value,5)
-  print(
-    as_tibble(rs) |> 
-      ggplot(aes(rs)) +
-      geom_histogram(bins=14,color="black",fill="aquamarine4") +
-      labs(title = .x,
-           subtitle = paste("Shapiro-Wilk - p-valor: ",sw_test)) +
-      theme_bw()
-  )
-  df_aux <- data_set |> 
-    select(designacao, bloco,!!sym(.x)) |> 
-    add_column(rs,yp)  |> 
-    filter(rs > 3 | rs < -3)
-    # arrange(rs)
-  if(nrow(df_aux) != 0) print(df_aux)
-  levene_teste <- lawstat::levene.test(y,trat)
-  levene_teste <- round(levene_teste$p.value,5)
-  box_plot <- data_set |> 
-      group_by(designacao) |> 
-      mutate(
-        y_mean = median(!!sym(.x),na.rm=TRUE),
-        designacao = as_factor(designacao))  |>
-      ungroup() |> 
-      mutate(designacao = designacao |>  fct_reorder(y_mean)) |> 
-      ggplot(aes(x=as_factor(designacao),y=!!sym(.x),
-             fill=as_factor(designacao))) +
-      geom_boxplot() +
-      scale_fill_viridis_d(option = "magma") +
-      theme_bw()+
-      labs(x="Designacao",
-           title =  paste("Levene test - p-valor: ",levene_teste))
-  
-  print(
-    box_plot
-  )
-  print(cat("\n"))
+  y <- data_set_bt |> pull(!!sym(.x))
+  trat <- data_set_bt |> pull(designacao) |> as_factor()
+  bloco <- data_set_bt |> pull(bloco) |> as_factor()
+  dbc(trat,bloco,y,mcomp = "sk")
+    print(cat("\n"))
 })
 ```
-
--->
 
 ## Análise exploratória - Multiespectral
 
@@ -114,79 +54,154 @@ map(lista_variaveis, ~{
 
 ```{r}
 library(tidyverse)
-data_set <- read_rds("data/batata-doce-multiespectral.rds")
-glimpse(data_set)
+data_set_mult <- read_rds("data/batata-doce-multiespectral.rds")
+glimpse(data_set_mult)
 ```
 
 ```{r}
-lista_variaveis <- data_set |> select(r:vari) |> names()
-epocas <- data_set |> pull(epoca) |> unique()
-# map(lista_variaveis, ~{
-#   data_set |> 
-#     ggplot(aes(x=!!sym(.x), y = ..density..)) +
-#     geom_histogram(color="black",fill="gray", bins = 15) +
-#     labs(title = .x) +
-#     theme_bw()
-# })
+lista_variaveis <- data_set_mult |> select(r:vari) |> names()
 ```
 
-<!--
 
-### Análise de resíduos - Pré-supostos da ANOVA
+### Análise considerando parcelas subdivididas
 
 ```{r}
 for(i in seq_along(lista_variaveis)){
-  for(j in seq_along(epocas)){
-    print("========================")
-    print(paste(lista_variaveis[i]," Época: ",epocas[j]))
-    print("========================")
-    y <- data_set |> filter(epoca == epocas[j]) |> pull(lista_variaveis[i])
-    trat <- data_set |> filter(epoca ==epocas[j])|> pull(designacao) |> as_factor()
-    bloco <- data_set |> filter(epoca == epocas[j]) |> pull(rep) |> as_factor()
-    mod <- aov(y ~ trat + bloco)
-    print(anova(mod))
-    rs <- rstudent(mod)
-    yp <- predict(mod)
-    sw_test <- shapiro.test(rs)
-    sw_test <- round(sw_test$p.value,5)
-    print(
-      as_tibble(rs) |> 
-        ggplot(aes(rs)) +
-        geom_histogram(bins=14,color="black",fill="aquamarine4") +
-        labs(title = paste(lista_variaveis[i]," Época: ",epocas[j]),
-             subtitle = paste("Shapiro-Wilk - p-valor: ",sw_test)) +
-        theme_bw()
-    )
-    df_aux <- data_set |> 
-      filter(epoca == epocas[j]) |> 
-      select(designacao, rep,lista_variaveis[i]) |> 
-      add_column(rs,yp)  |> 
-      filter(rs > 3 | rs < -3)
-    # arrange(rs)
-    if(nrow(df_aux) != 0) print(df_aux)
-    levene_teste <- lawstat::levene.test(y,trat)
-    levene_teste <- round(levene_teste$p.value,5)
-    box_plot <- data_set |> 
-      filter(epoca == epocas[j]) |> 
-      group_by(designacao) |> 
-      mutate(
-        y_mean = median(!!sym(lista_variaveis[i]),na.rm=TRUE),
-        designacao = as_factor(designacao))  |>
-      ungroup() |> 
-      mutate(designacao = designacao |>  fct_reorder(y_mean)) |> 
-      ggplot(aes(x=as_factor(designacao),y=!!sym(lista_variaveis[i]),
-                 fill=as_factor(designacao))) +
-      geom_boxplot() +
-      scale_fill_viridis_d(option = "magma") +
-      theme_bw()+
-      labs(x="Designacao",
-           title =  paste("Levene test - p-valor: ",levene_teste))
-    
-    print(
-      box_plot
-    )
-    print(cat("\n"))
-  }
+  print("========================")
+  print(lista_variaveis[i])
+  print("========================")
+  y <- data_set_mult |> pull(lista_variaveis[i])
+  trat <- data_set_mult |> pull(designacao) |> as_factor()
+  epoca <- data_set_mult |> pull(epoca) |> as_factor()
+  bloco <- data_set_mult |> pull(rep) |> as_factor()
+  psub2.dbc(trat,epoca,bloco,y,mcomp = "sk",
+            fac.names=c("trat","epoca"),sigT = 0.2)
+  print(cat("\n"))
 }
 ```
--->
+
+## Análise de Correlação Linear entre as variáveis
+
+### Juntando as bases
+```{r}
+data_set <- data_set_mult |> 
+  left_join( data_set_bt |> 
+               rename(rep = bloco),
+             by = c("designacao","rep"))
+```
+
+```{r}
+walk(c(1,3:5), ~{
+  dfau <- data_set |> 
+    filter(epoca == .x) |> 
+    select(r:tmspa_percent) 
+  
+  dfau_cor <- cor(dfau) 
+  
+  corrplot::corrplot(dfau_cor, method = "color",
+         outline = TRUE,
+         addgrid.col = "darkgray", cl.pos = "r", tl.col = "black",
+         tl.cex = 1, cl.cex = 1, type = "upper", bg="azure2",
+         diag = FALSE,
+         cl.ratio = 0.2,
+         cl.length = 5,
+         number.cex = 0.8)
+})
+```
+## Análise de agrupamento hierárquico - Por época
+
+```{r}
+map(c(1,3:5), ~{
+  print("========================")
+  print(paste0("Época: ",.x))
+  print("========================")
+  da_pad<-decostand(  data_set |> 
+    filter(epoca == .x) |> 
+    select(r:tmspa_percent) , 
+                  method = "standardize",
+                  na.rm=TRUE)
+  labs <- data_set |> filter(epoca == .x) |> pull(designacao)
+  da_pad_euc<-vegdist(da_pad,"euclidean") 
+  da_pad_euc_ward<-hclust(da_pad_euc, method="ward.D")
+  plot(da_pad_euc_ward,labels = labs,
+     ylab="Distancia Euclidiana",
+     xlab="Acessos", hang=-1,
+     col="blue", las=1,
+     cex=.6,lwd=1.5)
+}) 
+```
+
+## Componentes principais - Por época
+
+```{r}
+map(c(1,3:5), ~{
+  print("========================")
+  print(paste0("Época: ",.x))
+  print("========================")
+  print("======== Análise de Componentes Principais ========== ")
+  da_pad<-decostand(  data_set |> 
+    filter(epoca == .x) |> 
+    select(r:tmspa_percent) , 
+                  method = "standardize",
+                  na.rm=TRUE)
+  pca <-  prcomp(da_pad,scale.=TRUE)
+  # Autovalores
+  eig<-pca$sdev^2
+  print("==== Autovalores ====")
+  print(round(eig,3))
+  print("==== % da variância explicada ====")
+  ve<-eig/sum(eig)
+  print(round(ve,4))
+  print("==== % da variância explicada acumulada ====")
+  print(round(cumsum(ve),4)*100)
+  print("==== Poder Discriminante ====")
+  mcor<-cor(da_pad,pca$x)
+  corrplot::corrplot(mcor)
+  print("==== screeplot ====")
+  screeplot(pca)
+  abline(h=1)
+  labs <- data_set |> filter(epoca == .x) |> pull(designacao)
+  pc1V<-cor(da_pad,pca$x)[,1]/sd(cor(da_pad,pca$x)[,1])
+  pc2V<-cor(da_pad,pca$x)[,2]/sd(cor(da_pad,pca$x)[,2])
+  pc1c<-pca$x[,1]/sd(pca$x[,1])
+  pc2c<-pca$x[,2]/sd(pca$x[,2])
+  nv<-ncol(da_pad) # número de variáveis utilizadas na análise
+  bip<-data.frame(pc1c,pc2c,labs)
+  texto <- data.frame(
+    x = pc1V,
+    y = pc2V,
+    # z = pc3V,
+    label = names(da_pad)
+  )
+  
+  bi_plot <- bip |>
+    ggplot(aes(x=pc1c,y=pc2c))+
+    # geom_point() +
+    theme_minimal() +
+    geom_text(aes(label = labs), vjust = -0.5, size = 3) +  # nomes dos tratamentos
+    # # scale_shape_manual(values=16:18)+
+    # # scale_color_manual(values=c("#009E73", "#999999","#D55E00")) +
+    annotate(geom="text", x=pc1V, y=pc2V, label=names(pc1V),
+              color="black",font=3) +
+    geom_vline(aes(xintercept=0),
+                color="black", size=1)+
+    geom_hline(aes(yintercept=0),
+                color="black", size=1) +
+    annotate(geom="segment",
+              x=rep(0,length(da_pad)),
+              xend=texto$x,
+              y=rep(0,length(da_pad)),
+              yend=texto$y,color="black",lwd=.5) +
+    geom_label(data=texto,aes(x=x,y=y,label=label),
+               color="black",angle=0,fontface="bold",size=4,fill="white") +
+    labs(x=paste("CP1 (",round(100*ve[1],2),"%)",sep=""),
+         y=paste("CP2 (",round(100*ve[2],2),"%)",sep=""))+
+    theme(legend.position = "top")
+  # bi_plot +
+  #   coord_cartesian(
+  #     xlim = c(-4,3),
+  #     ylim = c(-3,8)
+  #   )
+}) 
+```
+
