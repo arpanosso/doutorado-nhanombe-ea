@@ -134,7 +134,7 @@ map(c(1,3:5), ~{
 ## Componentes principais - Por época
 
 ```{r}
-map(c(1,3:5), ~{
+for(.x in c(1,3,4,5)){
   print("========================")
   print(paste0("Época: ",.x))
   print("========================")
@@ -174,6 +174,15 @@ map(c(1,3:5), ~{
     label = names(da_pad)
   )
   
+  print("==== Tabela da correlação dos atributos com cada PC ====")
+  ck<-sum(pca$sdev^2>=0.98)
+  tabelapca<-vector()
+  for( l in 1:ck) tabelapca<-cbind(tabelapca,mcor[,l])
+  colnames(tabelapca)<-paste(rep(c("PC"),ck),1:ck,sep="")
+  pcat<-round(tabelapca,3)
+  tabelapca<-tabelapca[order(abs(tabelapca[,1])),]
+  
+  
   bi_plot <- bip |>
     ggplot(aes(x=pc1c,y=pc2c))+
     # geom_point() +
@@ -197,11 +206,9 @@ map(c(1,3:5), ~{
     labs(x=paste("CP1 (",round(100*ve[1],2),"%)",sep=""),
          y=paste("CP2 (",round(100*ve[2],2),"%)",sep=""))+
     theme(legend.position = "top")
-  # bi_plot +
-  #   coord_cartesian(
-  #     xlim = c(-4,3),
-  #     ylim = c(-3,8)
-  #   )
-}) 
+  
+    print(bi_plot)
+    print(tabelapca[,1:3])
+} 
 ```
 
